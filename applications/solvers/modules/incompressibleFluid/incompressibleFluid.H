@@ -59,6 +59,14 @@ See also
 #include "incompressibleMomentumTransportModels.H"
 #include "pressureReference.H"
 #include "IOMRFZoneList.H"
+#include "kEpsilon.H"
+#include "constantViscosityModel.H"
+#include <cassert>
+#include <unordered_map>
+
+#define PRINT_EXPR(x) (void)(Info << #x " = " << (x) << endl)
+#define PRINT(x) (void)(Info << #x " begin:\n" << (x) << "\n" #x " end"<< endl)
+Foam::string get_typename(const std::type_info &t_info);
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -66,6 +74,30 @@ namespace Foam
 {
 namespace solvers
 {
+
+struct momentumTransport_t
+    : Foam::RASModels::kEpsilon<Foam::incompressibleMomentumTransportModel>
+{
+    using _MyBase = Foam::RASModels::kEpsilon<Foam::incompressibleMomentumTransportModel>;
+    using _MyBase::kEpsilon;
+    using _MyBase::operator=;
+    using BasicMomentumTransportModel = Foam::incompressibleMomentumTransportModel;
+    using _MyBase::Cmu_; // 改为 public
+    void correct(); // 搬过来，方便修改
+    void correctNut(); // 同上
+
+
+};
+
+struct fvModels_t
+    : Foam::fvModels
+{
+    using _MyBase = Foam::fvModels;
+    using _MyBase::fvModels;
+    using _MyBase::source; // 公开所有source
+};
+
+static_assert(std::has_virtual_destructor<momentumTransport_t>::value);
 
 /*---------------------------------------------------------------------------*\
                           Class incompressibleFluid Declaration
@@ -75,7 +107,7 @@ class incompressibleFluid
 :
     public fluidSolver
 {
-
+    using _MyBase = fluidSolver;
 protected:
 
     // Pressure
@@ -99,10 +131,13 @@ protected:
     // Momentum transport
 
         //- Kinematic viscosity model
-        autoPtr<viscosityModel> viscosity;
+        // autoPtr<viscosityModel> viscosity;
+        using viscosity_t = Foam::viscosityModels::constant;
+        autoPtr<viscosity_t> viscosity;
 
         //- Pointer to the momentum transport model
-        autoPtr<incompressible::momentumTransportModel> momentumTransport;
+        // autoPtr<incompressible::momentumTransportModel> momentumTransport;
+        autoPtr<momentumTransport_t> momentumTransport;
 
 
     // Continuity properties
@@ -196,6 +231,10 @@ public:
         //- Called after the PIMPLE loop at the end of the time-step
         virtual void postSolve();
 
+        fvModels_t &fvModels() const
+        {
+            return static_cast<fvModels_t &>(_MyBase::fvModels());
+        }
 
     // Member Operators
 

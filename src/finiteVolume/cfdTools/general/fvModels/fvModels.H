@@ -81,6 +81,8 @@ class fvModels
         //- Check that all fvModels have been applied
         void checkApplied() const;
 
+protected:
+
         //- Return source for equation with specified name and dimensions
         template<class Type, class ... AlphaRhoFieldTypes>
         tmp<fvMatrix<Type>> source

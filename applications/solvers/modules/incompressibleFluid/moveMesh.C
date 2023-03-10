@@ -31,11 +31,17 @@ License
 
 bool Foam::solvers::incompressibleFluid::moveMesh()
 {
+    // 什么也没做
+    return false;
+
+    assert(pimple.firstIter());
+    assert(!pimple.moveMeshOuterCorrectors());
     if (pimple.firstIter() || pimple.moveMeshOuterCorrectors())
     {
         // Move the mesh
-        mesh.move();
-
+        // mesh.move();
+        assert(!mesh.move());
+        assert(!mesh.changing());
         if (mesh.changing())
         {
             MRF.update();

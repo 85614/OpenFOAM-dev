@@ -31,6 +31,9 @@ License
 #include "fvcFlux.H"
 #include "fvcDdt.H"
 #include "fvcSnGrad.H"
+#include "record.H"
+
+bool use_assert();
 
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
@@ -47,8 +50,14 @@ void Foam::solvers::incompressibleFluid::correctPressure()
       + MRF.zeroFilter(fvc::interpolate(rAU)*fvc::ddtCorr(U, phi, Uf))
     );
 
+    if (use_assert()) {
+        assert(!MRF.MRFZoneList::size());
+        assert(record._equal(phiHbyA, (fvc::flux(HbyA)+fvc::interpolate(rAU)*fvc::ddtCorr(U, phi, Uf))()));
+    }
+
     MRF.makeRelative(phiHbyA);
 
+    assert(p.needReference());
     if (p.needReference())
     {
         fvc::makeRelative(phiHbyA, U);
@@ -58,6 +67,7 @@ void Foam::solvers::incompressibleFluid::correctPressure()
 
     tmp<volScalarField> rAtU(rAU);
 
+    assert(!pimple.consistent());
     if (pimple.consistent())
     {
         rAtU = 1.0/max(1.0/rAU - UEqn.H1(), 0.1/rAU);
@@ -73,6 +83,14 @@ void Foam::solvers::incompressibleFluid::correctPressure()
 
     // Update the pressure BCs to ensure flux consistency
     constrainPressure(p, U, phiHbyA, rAtU(), MRF);
+
+    if (use_assert())
+    {
+        assert(record.equal(PAIR(tUEqn())));
+        assert(record.equal(PAIR(U)));
+        assert(record.equal(PAIR(p)));
+
+    }
 
     // Non-orthogonal pressure corrector loop
     while (pimple.correctNonOrthogonal())
@@ -90,9 +108,17 @@ void Foam::solvers::incompressibleFluid::correctPressure()
 
         pEqn.solve();
 
+        if (use_assert())
+        {
+            assert(pressureReference.refCell() == 0);
+            assert(pressureReference.refValue() == 0);
+            record.assign(PAIR(p));
+        }
+
         if (pimple.finalNonOrthogonalIter())
         {
             phi = phiHbyA - pEqn.flux();
+            record.assign(PAIR(phi));
         }
     }
 
@@ -100,16 +126,28 @@ void Foam::solvers::incompressibleFluid::correctPressure()
 
     // Explicitly relax pressure for momentum corrector
     p.relax();
+    if (use_assert())
+    {
+        assert(p.relaxationFactor() == 1);
+        assert(record.equal(PAIR(p)));
+    }
 
     U = HbyA - rAtU*fvc::grad(p);
     U.correctBoundaryConditions();
+    record.assign(PAIR(U));
     fvConstraints().constrain(U);
+    assert(record.equal(PAIR(U)));
 
     // Correct Uf if the mesh is moving
     fvc::correctUf(Uf, U, phi, MRF);
+    assert(Uf.empty());
 
     // Make the fluxes relative to the mesh motion
     fvc::makeRelative(phi, U);
+    if (use_assert()) {
+        assert(!phi.mesh().moving());
+        assert(record.equal(PAIR(phi)));
+    }
 }
 
 
