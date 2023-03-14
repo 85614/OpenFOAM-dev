@@ -25,6 +25,8 @@ License
 
 #include "fluid.H"
 #include "addToRunTimeSelectionTable.H"
+#include "tool.H"
+#include "eddyDiffusivity.H"
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -35,6 +37,21 @@ namespace solvers
     defineTypeNameAndDebug(fluid, 0);
     addToRunTimeSelectionTable(solver, fluid, fvMesh);
 }
+
+template<class _Base>
+struct with_base: public _Base 
+{
+    using _MyBase = _Base;
+    using _Base::_Base;
+};
+
+#define MAKE_SPECIAL_T(var, base_t) struct var##_t: public with_base<base_t>
+
+struct thermophysicalTransport_t
+    :public with_base<Foam::turbulenceThermophysicalTransportModels::eddyDiffusivity<Foam::RASThermophysicalTransportModel<Foam::ThermophysicalTransportModel<Foam::compressibleMomentumTransportModel, Foam::fluidThermo>>>>
+{
+
+};
 }
 
 
@@ -54,6 +71,9 @@ Foam::solvers::fluid::fluid(fvMesh& mesh)
     )
 {
     thermo.validate(type(), "h", "e");
+    // PRINT_EXPR(get_typename(typeid(thermophysicalTransport())));
+    assert(typeid(thermophysicalTransport()) == typeid(thermophysicalTransport_t::_MyBase));
+    
 }
 
 
@@ -86,5 +106,5 @@ void Foam::solvers::fluid::postCorrector()
     }
 }
 
-
+#include "tool.C"
 // ************************************************************************* //
